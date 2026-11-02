@@ -3,12 +3,13 @@ name: iOS
 on:
   push:
     branches: ["**"]
+    paths-ignore: ["**/*.md"]
   pull_request:
   workflow_dispatch:
 
 concurrency:
   group: ios-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   core-tests-linux:
