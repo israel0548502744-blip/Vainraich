@@ -172,6 +172,41 @@ struct EventDetailView: View {
                 }
             }
 
+            let suggestions = EventMatcher.suggestions(data: model.data, today: model.today)[event.id] ?? []
+            if !suggestions.isEmpty {
+                Section {
+                    ForEach(suggestions) { s in
+                        if let t = model.data.transactions.first(where: { $0.id == s.transactionID }) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                TransactionRow(transaction: t)
+                                Text(s.reasons.joined(separator: " · ")).font(.caption2).foregroundStyle(Theme.textSecondary)
+                                HStack {
+                                    Button("כן, זה התשלום") { model.confirmMatch(transactionID: t.id, eventID: event.id); model.show("קושר לאירוע") }
+                                        .buttonStyle(.borderedProminent).tint(Theme.actual)
+                                    Button("לא קשור") { model.rejectMatch(transactionID: t.id, eventID: event.id) }
+                                        .buttonStyle(.bordered)
+                                }
+                                .font(.subheadline)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("הכנסות שאולי שייכות לאירוע")
+                } footer: {
+                    Text("שום דבר לא מקושר בלי אישור שלך.")
+                }
+            }
+            if (event.expectedIncome ?? 0) == 0 && linked.filter({ $0.kind == .income }).isEmpty {
+                Section {
+                    if event.isIncomeEvent == false {
+                        Button("זה כן אירוע בתשלום") { model.markAwaitingPayment(event.id, expected: nil) }
+                    } else {
+                        Button { recording = .income } label: { Label("שילמו לי על האירוע", systemImage: "checkmark.circle") }
+                        Button("לא אירוע בתשלום") { model.markNotIncomeEvent(event.id) }.foregroundStyle(Theme.neutral)
+                    }
+                } header: { Text("תשלום") }
+            }
+
             Section("פעולות") {
                 if (event.expectedIncome ?? 0) > 0 && status != .paid {
                     Button { recording = .income } label: { Label("רישום תשלום שהתקבל", systemImage: "checkmark.circle") }

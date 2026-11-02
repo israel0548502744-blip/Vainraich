@@ -145,7 +145,8 @@ struct ImportReviewView: View {
         }
         do {
             let n = try model.applyImport(txs, adjustments: adjustments)
-            model.show("נוספו \(n) רשומות")
+            let matches = model.eventPaymentQuestions.filter { $0.kind == .possibleMatch }.count
+            model.show(matches > 0 ? "נוספו \(n) רשומות · \(matches) אירועים מחכים לאישור תשלום" : "נוספו \(n) רשומות")
             onDone()
         } catch {
             self.error = hebrewMessage(for: error)

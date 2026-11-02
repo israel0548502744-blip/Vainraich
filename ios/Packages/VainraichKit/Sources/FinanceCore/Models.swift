@@ -290,11 +290,16 @@ public struct FinanceEvent: Identifiable, Codable, Hashable, Sendable {
     public var notes: String
     /// `EKEvent.eventIdentifier` when linked to Apple Calendar.
     public var calendarEventIdentifier: String?
+    /// The user's answer to "is this a paid event?": nil = not asked yet, true = income expected, false = not a paid event.
+    public var isIncomeEvent: Bool?
+    /// Income transactions the user said are NOT the payment for this event (never suggested again).
+    public var rejectedTransactionIDs: [UUID]?
 
     public init(
         id: UUID = UUID(), title: String, date: LocalDate, startTime: TimeOfDay? = nil, endTime: TimeOfDay? = nil,
         location: String = "", contactID: UUID? = nil, expectedIncome: Decimal? = nil, expectedExpense: Decimal? = nil,
-        debtID: UUID? = nil, notes: String = "", calendarEventIdentifier: String? = nil
+        debtID: UUID? = nil, notes: String = "", calendarEventIdentifier: String? = nil,
+        isIncomeEvent: Bool? = nil, rejectedTransactionIDs: [UUID]? = nil
     ) {
         self.id = id
         self.title = title
@@ -308,6 +313,8 @@ public struct FinanceEvent: Identifiable, Codable, Hashable, Sendable {
         self.debtID = debtID
         self.notes = notes
         self.calendarEventIdentifier = calendarEventIdentifier
+        self.isIncomeEvent = isIncomeEvent
+        self.rejectedTransactionIDs = rejectedTransactionIDs
     }
 }
 

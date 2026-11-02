@@ -315,6 +315,7 @@ final class AppModel {
             try recordDebtPayment(debtID: debtID, amount: amount, date: date, accountID: accountID)
             return
         }
+        if kind == .income, let ei = data.events.firstIndex(where: { $0.id == eventID }) { data.events[ei].isIncomeEvent = true }
         let category = kind == .income ? DefaultCategories.income[1].id : nil
         try save(FinanceTransaction(kind: kind, amount: amount, accountID: accountID, categoryID: category, contactID: event.contactID,
                                     title: event.title, date: date, paymentMethod: method, eventID: eventID, source: .eventPayment))
@@ -330,6 +331,52 @@ final class AppModel {
         data.debts.append(debt)
         data.events[i].debtID = debt.id
         if data.events[i].contactID == nil { data.events[i].contactID = contactID }
+        changed()
+    }
+
+    // MARK: - Event ↔ income matching (always confirmed by the user)
+
+    var eventPaymentQuestions: [EventPaymentQuestion] { EventMatcher.questions(data: data, today: today) }
+
+    /// User confirmed: this income is the payment (or part of it) for the event.
+    func confirmMatch(transactionID: UUID, eventID: UUID) {
+        guard let ti = data.transactions.firstIndex(where: { $0.id == transactionID }),
+              let ei = data.events.firstIndex(where: { $0.id == eventID }) else { return }
+        data.transactions[ti].eventID = eventID
+        if data.transactions[ti].contactID == nil { data.transactions[ti].contactID = data.events[ei].contactID }
+        data.events[ei].isIncomeEvent = true
+        // If the event already has an open receivable, the payment also reduces that debt (no new money is created).
+        if let debtID = data.events[ei].debtID, let debt = data.debt(debtID) {
+            let bal = DebtCalculator.balance(of: debt, payments: data.debtPayments, today: today)
+            if bal.isOpen && bal.remaining > 0 && !data.debtPayments.contains(where: { $0.transactionID == transactionID }) {
+                let t = data.transactions[ti]
+                data.debtPayments.append(DebtPayment(debtID: debtID, amount: min(t.amount, bal.remaining), date: t.date, transactionID: t.id))
+            }
+        }
+        changed()
+    }
+
+    /// User said: this income is NOT for this event. It will not be suggested again.
+    func rejectMatch(transactionID: UUID, eventID: UUID) {
+        guard let ei = data.events.firstIndex(where: { $0.id == eventID }) else { return }
+        var list = data.events[ei].rejectedTransactionIDs ?? []
+        if !list.contains(transactionID) { list.append(transactionID) }
+        data.events[ei].rejectedTransactionIDs = list
+        changed()
+    }
+
+    /// User said: not a paid event — stop asking.
+    func markNotIncomeEvent(_ eventID: UUID) {
+        guard let ei = data.events.firstIndex(where: { $0.id == eventID }) else { return }
+        data.events[ei].isIncomeEvent = false
+        changed()
+    }
+
+    /// User said: it is a paid event, money not received yet (optionally with the expected amount).
+    func markAwaitingPayment(_ eventID: UUID, expected: Decimal?) {
+        guard let ei = data.events.firstIndex(where: { $0.id == eventID }) else { return }
+        data.events[ei].isIncomeEvent = true
+        if let expected, expected > 0 { data.events[ei].expectedIncome = expected.rounded(scale: 2) }
         changed()
     }
 

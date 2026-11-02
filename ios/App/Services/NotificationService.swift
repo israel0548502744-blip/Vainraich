@@ -125,9 +125,14 @@ final class NotificationService {
                 if let t = e.startTime { body += " ב־\(t)" }
                 if let inc = e.expectedIncome, inc > 0 { body += " · הכנסה צפויה \(MoneyFormatter.format(inc))" }
                 add("evt-\(e.id)", e.date.adding(days: -1), "מחר: \(e.title)", body, hour: 20)
+            }
+            // The day after an event: "did you get paid?" — also for events whose title says "אירוע" but have no amount yet.
+            for e in data.events where e.date >= today.adding(days: -1) && e.date <= horizon && EventMatcher.isCandidate(e) && e.debtID == nil {
                 let fin = EventCalculator.financials(of: e, transactions: data.transactions)
-                if fin.outstandingIncome > 0 && e.debtID == nil {
-                    add("evt-pay-\(e.id)", e.date.adding(days: 1), "האם התקבל תשלום?", "על \(e.title): \(MoneyFormatter.format(fin.outstandingIncome)) עדיין פתוח")
+                if fin.outstandingIncome > 0 {
+                    add("evt-pay-\(e.id)", e.date.adding(days: 1), "האם שילמו לך?", "על \(e.title): \(MoneyFormatter.format(fin.outstandingIncome)) עדיין פתוח")
+                } else if (e.expectedIncome ?? 0) == 0 && e.isIncomeEvent == nil && fin.receivedIncome == 0 {
+                    add("evt-ask-\(e.id)", e.date.adding(days: 1), "האם שילמו לך על האירוע?", "\(e.title) — סמן באפליקציה אם התקבל תשלום")
                 }
             }
         }

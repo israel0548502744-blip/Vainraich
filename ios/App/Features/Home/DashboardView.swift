@@ -49,6 +49,7 @@ struct DashboardView: View {
                         .card()
                 } else {
                     periodPicker
+                    eventQuestionsCard
                     heroCard(s)
                     equationCard(s)
                     if let neg = s.forecast.firstNegativeDay { negativeWarning(neg) }
@@ -118,6 +119,29 @@ struct DashboardView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("אישור") { showingCustom = false } } }
         }
         .presentationDetents([.medium])
+    }
+
+    @ViewBuilder
+    private var eventQuestionsCard: some View {
+        let q = model.eventPaymentQuestions
+        if !q.isEmpty {
+            let matches = q.filter { $0.kind == .possibleMatch }.count
+            NavigationLink { EventPaymentReviewView() } label: {
+                HStack(spacing: 12) {
+                    CategoryIcon(icon: "calendar.badge.checkmark", color: Theme.expected, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(q.count == 1 ? "אירוע אחד מחכה לאישור תשלום" : "\(q.count) אירועים מחכים לאישור תשלום")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                        Text(matches > 0 ? "נמצאו הכנסות שנראות כמו התשלום — לאשר?" : "שילמו לך? סמן כדי שהמספרים יהיו מדויקים.")
+                            .font(.caption).foregroundStyle(Theme.textSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.left").font(.footnote).foregroundStyle(Theme.textSecondary)
+                }
+                .card(padding: 14)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private func heroCard(_ s: FinancialSummary) -> some View {

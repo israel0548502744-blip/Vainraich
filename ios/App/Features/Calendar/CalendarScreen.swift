@@ -54,6 +54,19 @@ struct CalendarScreen: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) { Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("אירוע חדש") }
             ToolbarItem(placement: .topBarLeading) { Button("היום") { selected = model.today; anchor = model.today } }
+            ToolbarItem(placement: .primaryAction) {
+                NavigationLink { EventPaymentReviewView() } label: {
+                    let n = model.eventPaymentQuestions.count
+                    Image(systemName: n > 0 ? "checklist.unchecked" : "checklist")
+                        .overlay(alignment: .topTrailing) {
+                            if n > 0 {
+                                Text("\(n)").font(.caption2.bold()).foregroundStyle(.white)
+                                    .padding(4).background(Theme.liability, in: Circle()).offset(x: 8, y: -8)
+                            }
+                        }
+                }
+                .accessibilityLabel("אירועים לאישור תשלום")
+            }
         }
         .sheet(isPresented: $adding) { EventEditor(event: nil, date: selected) }
         .navigationDestination(item: $openEvent) { EventDetailView(eventID: $0.id) }
