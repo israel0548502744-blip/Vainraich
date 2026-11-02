@@ -157,6 +157,20 @@ final class RecurrenceTests: XCTestCase {
         XCTAssertEqual(d.map(\.description), ["29/02/2028", "28/02/2029", "28/02/2030"])
     }
 
+    func testFutureStartIsNotMaterializedEarly() {
+        let today = LocalDate(year: 2026, month: 11, day: 2)
+        let r = RecurringRule(kind: .income, amount: 9400, accountID: acc, title: "משכורת", frequency: .monthly, dayOfMonth: 1,
+                              startDate: LocalDate(year: 2026, month: 12, day: 1))
+        XCTAssertTrue(RecurrenceEngine.materialize(rules: [r], through: today, existing: []).isEmpty)
+        let bank = Account(id: acc, name: "b", type: .bank, openingBalance: 0, openingDate: today)
+        let data = FinanceData(accounts: [bank], recurringRules: [r])
+        // Forecast ending before the start date must not contain it.
+        XCTAssertTrue(ForecastEngine.make(data: data, range: .next(20, from: today), today: today).items.isEmpty)
+        let f = ForecastEngine.make(data: data, range: .next(40, from: today), today: today)
+        XCTAssertEqual(f.items.map(\.date), [LocalDate(year: 2026, month: 12, day: 1)])
+        XCTAssertEqual(f.items.first?.confidence, .expected)
+    }
+
     func testAutoPostMaterializesCompleted() {
         let r = RecurringRule(kind: .expense, amount: 50, accountID: acc, title: "x", frequency: .monthly, startDate: LocalDate(year: 2026, month: 9, day: 1), autoPost: true)
         let made = RecurrenceEngine.materialize(rules: [r], through: LocalDate(year: 2026, month: 11, day: 2), existing: [])

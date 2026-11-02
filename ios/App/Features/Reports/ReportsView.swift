@@ -106,6 +106,7 @@ struct ReportsView: View {
             .chartForegroundStyleScale(["הכנסות": Theme.actual, "הוצאות": Theme.liability])
             .chartYAxis { AxisMarks { v in AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { Text(Decimal(d).ilsCompact) } } } }
             .frame(height: 220)
+            .environment(\.layoutDirection, .leftToRight) // time flows left → right in charts
             Text("הקו מראה את התזרים הנטו בכל חודש.").font(.caption2).foregroundStyle(Theme.textSecondary)
         }
         .card()
@@ -285,6 +286,7 @@ struct ReportPDFPage: View {
             }
             .chartForegroundStyleScale(["הכנסות": Color.green, "הוצאות": Color.red])
             .frame(height: 180)
+            .environment(\.layoutDirection, .leftToRight) // time flows left → right in charts
             Text("הוצאות לפי קטגוריה").font(.headline)
             ForEach(cats) { c in
                 HStack { Text(c.name); Spacer(); Text(ltr(String(format: "%.0f%%", c.share * 100))).foregroundStyle(.secondary); Text(c.amount.ils).monospacedDigit() }

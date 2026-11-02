@@ -122,7 +122,7 @@ public enum ForecastEngine {
         }
 
         // 2. Recurring occurrences without a recorded transaction.
-        for rule in data.recurringRules where rule.isActive {
+        for rule in data.recurringRules where rule.isActive && rule.startDate <= range.end {
             // Unrecorded past occurrences are surfaced as overdue on the first day.
             let lookback = DateRange(start: max(rule.startDate, today.adding(days: -31)), end: range.end)
             for d in RecurrenceEngine.unrecordedOccurrences(of: rule, in: lookback, transactions: data.transactions) {

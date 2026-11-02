@@ -270,6 +270,7 @@ struct DashboardView: View {
             .chartForegroundStyleScale(["הכנסות": Theme.actual, "הוצאות": Theme.liability])
             .chartYAxis { AxisMarks { v in AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { Text(Decimal(d).ilsCompact) } } } }
             .frame(height: 180)
+            .environment(\.layoutDirection, .leftToRight) // time flows left → right in charts
         }
         .card()
     }
@@ -340,6 +341,7 @@ struct ForecastChartCard: View {
             .chartYAxis { AxisMarks { v in AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { Text(Decimal(d).ilsCompact) } } } }
             .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) { v in AxisGridLine(); AxisValueLabel(format: .dateTime.day().month(.defaultDigits)) } }
             .frame(height: 200)
+            .environment(\.layoutDirection, .leftToRight) // time flows left → right in charts
             HStack(spacing: 14) {
                 legend(Theme.brand, "כולל צפוי ומשוער", dashed: false)
                 legend(Theme.actual, "רק מאושר", dashed: true)

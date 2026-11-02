@@ -89,7 +89,7 @@ public enum RecurrenceEngine {
     /// Never creates a second transaction for an occurrence that already has one.
     public static func materialize(rules: [RecurringRule], through today: LocalDate, existing: [FinanceTransaction]) -> [FinanceTransaction] {
         var created: [FinanceTransaction] = []
-        for rule in rules where rule.isActive {
+        for rule in rules where rule.isActive && rule.startDate <= today {
             let range = DateRange(start: rule.startDate, end: today)
             for d in unrecordedOccurrences(of: rule, in: range, transactions: existing) {
                 created.append(makeTransaction(for: rule, on: d, status: rule.autoPost ? .completed : .pending))
