@@ -1,0 +1,91 @@
+name: iOS
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests-linux:
+    name: Engine tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run FinanceCore + DocumentAI tests
+        working-directory: ios/Packages/VainraichKit
+        run: swift test
+
+  app-build:
+    name: Build app, run tests, capture screenshots (macOS)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: |
+          ls /Applications | grep -i xcode || true
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Package tests (macOS)
+        working-directory: ios/Packages/VainraichKit
+        run: swift test
+
+      - name: Build for simulator
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project Vainraich.xcodeproj -scheme Vainraich \
+            -sdk iphonesimulator -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log | grep -E "error:|warning: .*(deprecated|never)|BUILD" || true
+          grep -q "BUILD SUCCEEDED" build.log
+
+      - name: Print compiler errors
+        if: failure()
+        working-directory: ios
+        run: grep -E "error:" build.log | sort -u | head -150 || true
+
+      - name: Screenshots (demo data)
+        working-directory: ios
+        run: |
+          set -x
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; c=[x for r,v in d.items() if 'iOS' in r for x in v if x['name'].startswith('iPhone') and 'Pro' in x['name']]; print(c[-1]['udid'])")
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl status_bar "$DEVICE" override --time "09:41" || true
+          APP=build/Build/Products/Debug-iphonesimulator/Vainraich.app
+          xcrun simctl install "$DEVICE" "$APP"
+          mkdir -p screenshots
+          for TAB in home calendar transactions debts more accounts reports settings import forecast onboarding; do
+            xcrun simctl terminate "$DEVICE" com.vainraich.finance || true
+            xcrun simctl launch "$DEVICE" com.vainraich.finance -uiDemo YES -startScreen "$TAB"
+            sleep 6
+            xcrun simctl io "$DEVICE" screenshot "screenshots/$TAB.png"
+          done
+          xcrun simctl ui "$DEVICE" appearance dark
+          xcrun simctl terminate "$DEVICE" com.vainraich.finance || true
+          xcrun simctl launch "$DEVICE" com.vainraich.finance -uiDemo YES -startScreen home
+          sleep 6
+          xcrun simctl io "$DEVICE" screenshot "screenshots/home-dark.png"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: ios/screenshots
+          if-no-files-found: ignore
