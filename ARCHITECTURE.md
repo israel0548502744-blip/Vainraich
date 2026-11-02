@@ -1,6 +1,6 @@
 # ארכיטקטורה
 
-> סטטוס: **הצעה — ממתינה לאישור** (שלב 0)
+> סטטוס: **אושר ע״י המשתמש (02/11/2026)** עם שינויים: מקומי-תחילה, ייבוא מסמכים עם AI, ספקי AI חינמיים. ראו §12.
 
 ## 1. תמונה כללית
 
@@ -189,3 +189,39 @@ balance(account) = opening_balance + Σ effect(t)  for t in transactions where s
 3. האם לכלול חיסכון ב"כסף זמין" כברירת מחדל? (מוצע: לא)
 4. מטבע: ILS בלבד ב-MVP? (מוצע: כן)
 5. Sign in with Apple + אימייל כספקי התחברות? (מוצע: כן)
+
+## 12. עדכון 02/11/2026 — החלטות שאושרו
+
+### 12.1 מקומי-תחילה
+```
+iPhone ── AppModel (@Observable) ── FinanceCore (חישובים) ── FinanceFileStore (JSON, FileProtection.complete)
+   │                                   └─ DocumentAI (חילוץ ממסמכים)
+   ├─ EventKit · UserNotifications · LocalAuthentication · VisionKit · ContactsUI · AppIntents
+   └─ ספקי AI (HTTPS ישיר, מפתח של המשתמש מה-Keychain)
+```
+* כל הנתונים במסמך אחד (`FinanceData`) שנשמר אטומית ב-Application Support עם הצפנת iOS.
+* סכומים נשמרים כמחרוזות (`"1234.50"`) — אין המרה דרך Double בשום שלב.
+* גיבוי/שחזור: ייצוא קובץ JSON מלא דרך גיליון השיתוף (iCloud Drive/קבצים).
+* Supabase (שלב 2) יתווסף כשכבת סנכרון אופציונלית מעל אותו מודל.
+
+### 12.2 מבנה הקוד בפועל
+```
+ios/
+  project.yml                      XcodeGen
+  App/                             SwiftUI: AppModel, DesignSystem, Features/*, Services/*
+  Packages/VainraichKit/
+    Sources/FinanceCore/           LocalDate, Money, Models, Ledger, Recurrence, Debts, Forecast, Summary, Filtering, Persistence, DemoData
+    Sources/DocumentAI/            ExtractionModels, ExtractionPrompt, Providers, RuleBasedParser, Redactor, ImportPlanner
+    Tests/                         48 בדיקות (כולל תרחישים A–E)
+.github/workflows/ios.yml          בדיקות Linux + בנייה ל-Simulator + צילומי מסך (macOS)
+```
+
+### 12.3 זרימת ייבוא מסמך
+1. המשתמש בוחר חשבון יעד ומסמך (סריקה, תמונה, PDF, טקסט).
+2. `DocumentPreprocessor` מתאים את הקלט ליכולות הספק: PDF ישיר / תמונות / טקסט (PDFKit או זיהוי טקסט Vision). במצב פרטיות: טקסט בלבד + `Redactor` (ת.ז., חשבונות, כרטיסים → 4 ספרות אחרונות).
+3. הספק מחזיר JSON לפי סכמה קבועה (`ExtractionPrompt`); הפענוח סלחני — שורה פגומה נזרקת, לא כל המסמך.
+4. `ImportPlanner`: ממפה לתנועות, מסווג חיוב כרטיס כ**העברה** (מונע ספירה כפולה), מזהה כפילויות (מזהה חיצוני, סכום+תאריך±1, ביט±3 ימים), מנחש קטגוריה, משווה יתרות.
+5. מסך בדיקה: המשתמש מאשר/עורך/מבטל כל שורה ובוחר אם להתאים יתרה (תנועת `adjustment` — לא הכנסה ולא הוצאה).
+
+### 12.4 החלטת אבטחה: מפתחות API
+הכלל "אין מפתחות בלקוח" נועד לסודות *של האפליקציה*. כאן המפתח שייך למשתמש ומשמש רק אותו, ולכן נשמר ב-Keychain (`WhenUnlockedThisDeviceOnly`), לא בקבצים ולא בגיבויים. אם בעתיד תופעל האפליקציה לציבור עם מפתח משותף — הקריאות יעברו דרך Edge Function.

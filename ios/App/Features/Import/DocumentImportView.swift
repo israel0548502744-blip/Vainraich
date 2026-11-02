@@ -20,7 +20,7 @@ struct DocumentImportView: View {
     @State private var showPaste = false
     @State private var pastedText = ""
     @State private var isWorking = false
-    @State private var plan: ImportPlan?
+    @State private var plan: PlanBox?
     @State private var error: String?
     @State private var provider = AISettings.provider
     @State private var addingAccount = false
@@ -103,7 +103,7 @@ struct DocumentImportView: View {
         }
         .sheet(isPresented: $showPaste) { pasteSheet }
         .sheet(isPresented: $addingAccount) { AccountEditor(account: nil) }
-        .navigationDestination(item: Binding(get: { plan.map(PlanBox.init) }, set: { plan = $0?.plan })) { box in
+        .navigationDestination(item: $plan) { box in
             ImportReviewView(plan: box.plan) { dismissAll() }
         }
         .alert("לא הצלחתי לקרוא", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
@@ -183,7 +183,7 @@ struct DocumentImportView: View {
             defer { isWorking = false }
             do {
                 let result = try await DocumentPreprocessor.extract(picked, using: extractor, textOnlyRedacted: textOnly)
-                plan = ImportPlanner.plan(result: result, targetAccountID: accountID, data: model.data, today: model.today)
+                plan = PlanBox(plan: ImportPlanner.plan(result: result, targetAccountID: accountID, data: model.data, today: model.today))
             } catch {
                 self.error = hebrewMessage(for: error)
             }

@@ -28,13 +28,13 @@ final class NotificationService {
     @ObservationIgnored private var task: Task<Void, Never>?
     private let prefix = "vr."
 
-    static var reminderHour: Int {
+    nonisolated static var reminderHour: Int {
         get { UserDefaults.standard.object(forKey: "notify.hour") as? Int ?? 9 }
         set { UserDefaults.standard.set(newValue, forKey: "notify.hour") }
     }
 
-    static func isEnabled(_ kind: Kind) -> Bool { UserDefaults.standard.object(forKey: kind.key) as? Bool ?? true }
-    static func setEnabled(_ kind: Kind, _ on: Bool) { UserDefaults.standard.set(on, forKey: kind.key) }
+    nonisolated static func isEnabled(_ kind: Kind) -> Bool { UserDefaults.standard.object(forKey: kind.key) as? Bool ?? true }
+    nonisolated static func setEnabled(_ kind: Kind, _ on: Bool) { UserDefaults.standard.set(on, forKey: kind.key) }
 
     func refreshAuthorization() async {
         authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus

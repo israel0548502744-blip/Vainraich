@@ -11,7 +11,7 @@ struct SettingsView: View {
     @State private var importingBackup = false
     @State private var pendingBackup: FinanceData?
     @State private var confirmErase = false
-    @State private var lockOn = BiometricLock().isEnabled
+    @State private var lockOn = UserDefaults.standard.bool(forKey: "appLockEnabled")
 
     var body: some View {
         Form {

@@ -39,9 +39,11 @@ struct TransactionsView: View {
                     Text("החלק ימינה כדי לסמן שהתשלום בוצע. עד אז הוא לא משנה את היתרה בפועל.")
                 }
             }
-            ForEach(groups, id: \.key) { date, items in
-                Section(header: dayHeader(date, items)) {
-                    ForEach(items) { t in row(t) }
+            ForEach(groups, id: \.key) { group in
+                Section {
+                    ForEach(group.value) { t in row(t) }
+                } header: {
+                    dayHeader(group.key, group.value)
                 }
             }
         }
