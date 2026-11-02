@@ -62,26 +62,34 @@ jobs:
 
       - name: Screenshots (demo data)
         working-directory: ios
+        timeout-minutes: 15
+        continue-on-error: true
         run: |
           set -x
-          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; c=[x for r,v in d.items() if 'iOS' in r for x in v if x['name'].startswith('iPhone') and 'Pro' in x['name']]; print(c[-1]['udid'])")
-          xcrun simctl boot "$DEVICE"
-          xcrun simctl bootstatus "$DEVICE" -b
-          xcrun simctl status_bar "$DEVICE" override --time "09:41" || true
-          APP=build/Build/Products/Debug-iphonesimulator/Vainraich.app
-          xcrun simctl install "$DEVICE" "$APP"
+          t() { perl -e 'alarm shift; exec @ARGV' "$@"; }   # run with a time limit (seconds)
           mkdir -p screenshots
-          for TAB in home calendar transactions debts more accounts reports settings import forecast onboarding; do
-            xcrun simctl terminate "$DEVICE" com.vainraich.finance || true
-            xcrun simctl launch "$DEVICE" com.vainraich.finance -uiDemo YES -startScreen "$TAB"
-            sleep 6
-            xcrun simctl io "$DEVICE" screenshot "screenshots/$TAB.png"
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; c=[x for r,v in d.items() if 'iOS' in r for x in v if x['name'].startswith('iPhone')]; p=[x for x in c if 'Pro' in x['name']] or c; print(p[-1]['udid'])")
+          echo "Device: $DEVICE"
+          t 120 xcrun simctl boot "$DEVICE" || true
+          for i in $(seq 1 60); do
+            xcrun simctl list devices | grep "$DEVICE" | grep -q Booted && break
+            sleep 3
           done
-          xcrun simctl ui "$DEVICE" appearance dark
-          xcrun simctl terminate "$DEVICE" com.vainraich.finance || true
-          xcrun simctl launch "$DEVICE" com.vainraich.finance -uiDemo YES -startScreen home
-          sleep 6
-          xcrun simctl io "$DEVICE" screenshot "screenshots/home-dark.png"
+          sleep 20
+          t 30 xcrun simctl status_bar "$DEVICE" override --time "09:41" || true
+          APP=build/Build/Products/Debug-iphonesimulator/Vainraich.app
+          t 180 xcrun simctl install "$DEVICE" "$APP"
+          shot() {
+            t 20 xcrun simctl terminate "$DEVICE" com.vainraich.finance || true
+            t 60 xcrun simctl launch "$DEVICE" com.vainraich.finance -uiDemo YES -startScreen "$1" || true
+            sleep 7
+            t 30 xcrun simctl io "$DEVICE" screenshot "screenshots/$2.png" || true
+          }
+          for TAB in home calendar transactions debts more accounts reports settings import forecast; do shot "$TAB" "$TAB"; done
+          t 30 xcrun simctl ui "$DEVICE" appearance dark || true
+          shot home home-dark
+          shot calendar calendar-dark
+          ls -la screenshots
 
       - name: Upload screenshots
         if: always()
