@@ -5,9 +5,13 @@ APK="$1"; OUT="$2"; PKG=com.vainraich.finance
 mkdir -p "$OUT"
 adb install -r "$APK"
 adb shell settings put system system_locales he-IL || true
+# The emulator's own launcher sometimes ANRs on slow CI machines; hide system error dialogs so they do not cover the app.
+adb shell settings put global hide_error_dialogs 1 || true
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null || true
 adb logcat -c
 shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
-start() { adb shell am start -W -n $PKG/.MainActivity "$@" > /dev/null; sleep 4; }
+# -S force-stops first so every launch is a cold start that reads the extras (otherwise the task is only brought to front).
+start() { adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null 2>&1 || true; adb shell am start -S -W -n $PKG/.MainActivity "$@" > /dev/null; sleep 4; }
 
 start; sleep 2; shot 00-onboarding
 for s in home calendar transactions debts more accounts reports settings ai import forecast review newExpense newEvent; do
