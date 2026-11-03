@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext is allowed at the OS level only so a self-hosted AI server on the home network (Ollama / LM Studio)
+     can be reached. The app itself refuses http:// for anything that is not a private LAN address (see AiSettings.isAllowedBaseUrl). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
