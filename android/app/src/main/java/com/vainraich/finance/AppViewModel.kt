@@ -8,6 +8,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.vainraich.core.*
+import com.vainraich.core.ai.*
+import com.vainraich.finance.ui.ils
 import com.vainraich.finance.services.Reminders
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,6 +43,7 @@ sealed class Route {
     data object CalendarSettings : Route()
     data object NotificationSettings : Route()
     data object Integrations : Route()
+    data object Chat : Route()
 }
 
 enum class Tab { HOME, CALENDAR, TRANSACTIONS, DEBTS, MORE }
@@ -317,6 +320,101 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun updateSettings(s: FinanceSettings) = update { it.copy(settings = s) }
+
+    // ---------- debts: extra charges ----------
+    fun addCharge(debtId: String, amount: Money, reason: String, date: LocalDate = today) {
+        val d = data.debt(debtId) ?: return
+        if (!amount.isPos) throw ValidationError.NonPositiveAmount
+        save(d.withCharge(amount.m2(), reason.trim(), date))
+    }
+
+    // ---------- AI assistant chat ----------
+    data class ChatEntry(
+        val role: ChatRole, val text: String, val actions: List<ProposedAction> = emptyList(),
+        /** index -> result message once confirmed / "בוטל" once dismissed */
+        val resolved: Map<Int, String> = emptyMap(), val isError: Boolean = false, val id: String = newId(),
+    )
+    val chat = mutableStateListOf<ChatEntry>()
+    var chatBusy by mutableStateOf(false)
+        private set
+
+    fun sendChat(text: String, onAnswer: (String) -> Unit = {}) {
+        val q = text.trim()
+        if (q.isEmpty() || chatBusy) return
+        chat.add(ChatEntry(ChatRole.USER, q))
+        val provider = runCatching { com.vainraich.finance.services.AiSettings(getApplication()).extractor() }.getOrElse { e ->
+            chat.add(ChatEntry(ChatRole.ASSISTANT, (e as? AIError)?.hebrew ?: (e.message ?: "שגיאה"), isError = true)); return
+        } as? ChatProvider
+        if (provider == null) {
+            chat.add(ChatEntry(ChatRole.ASSISTANT, "כדי לדבר איתי צריך לבחור ספק בינה מלאכותית (למשל Gemini החינמי) בהגדרות ← בינה מלאכותית.", isError = true)); return
+        }
+        val history = chat.filter { !it.isError }.map { ChatMessage(it.role, it.text + it.actions.joinToString("") { a -> "\n[הצעה: ${a.summary}]" }) }
+        val system = Assistant.systemPrompt(data, today)
+        chatBusy = true
+        viewModelScope.launch {
+            try {
+                val raw = withContext(Dispatchers.IO) { provider.chat(system, history) }
+                val r = Assistant.parse(raw)
+                val shown = r.text.ifBlank { if (r.actions.isNotEmpty()) "הנה מה שאני מציע לרשום:" else "…" }
+                chat.add(ChatEntry(ChatRole.ASSISTANT, shown, r.actions))
+                onAnswer(shown)
+            } catch (e: AIError) {
+                chat.add(ChatEntry(ChatRole.ASSISTANT, e.hebrew, isError = true))
+            } catch (e: Exception) {
+                chat.add(ChatEntry(ChatRole.ASSISTANT, e.message ?: "שגיאה", isError = true))
+            } finally { chatBusy = false }
+        }
+    }
+
+    fun clearChat() { if (!chatBusy) chat.clear() }
+
+    private fun resolve(entryId: String, index: Int, msg: String) {
+        val i = chat.indexOfFirst { it.id == entryId }
+        if (i >= 0) chat[i] = chat[i].copy(resolved = chat[i].resolved + (index to msg))
+    }
+
+    fun dismissAction(entryId: String, index: Int) = resolve(entryId, index, "בוטל")
+
+    /** The user tapped "confirm" on a suggestion — only now is anything saved. */
+    fun confirmAction(entryId: String, index: Int) {
+        val a = chat.firstOrNull { it.id == entryId }?.actions?.getOrNull(index) ?: return
+        var msg = "נשמר ✓"
+        val ok = attempt {
+            when (a) {
+                is ProposedAction.AddTransaction -> {
+                    val acc = Assistant.findAccount(data, a.account)?.id ?: defaultAccountId ?: throw ValidationError.UnknownAccount
+                    val cat = Assistant.findCategory(data, a.category, a.kind)?.id ?: if (a.kind == TxKind.INCOME) "i06" else "e13"
+                    val contact = a.person?.let { (Assistant.findContact(data, it) ?: addContact(Contact(name = it))).id }
+                    save(Transaction(kind = a.kind, amount = a.amount, accountId = acc, categoryId = cat, contactId = contact, title = a.title, date = a.date ?: today))
+                    msg = "נשמר ✓ (${data.account(acc)?.name})"
+                }
+                is ProposedAction.AddDebt -> {
+                    val c = Assistant.findContact(data, a.person) ?: addContact(Contact(name = a.person))
+                    save(Debt(direction = a.direction, contactId = c.id, title = a.title, originalAmount = a.amount, issuedDate = today, dueDate = a.dueDate))
+                }
+                is ProposedAction.AddCharge -> {
+                    val d = Assistant.findOpenDebt(data, a.person, today, DebtDirection.RECEIVABLE) ?: Assistant.findOpenDebt(data, a.person, today)
+                    if (d != null) { addCharge(d.id, a.amount, a.reason); msg = "נוסף לחוב ✓ (עכשיו ${debtBalance(data.debt(d.id)!!).remaining.ils()})" }
+                    else {
+                        val c = Assistant.findContact(data, a.person) ?: addContact(Contact(name = a.person))
+                        save(Debt(direction = DebtDirection.RECEIVABLE, contactId = c.id, title = a.reason.ifBlank { "חוב" }, originalAmount = a.amount, issuedDate = today))
+                        msg = "לא היה חוב פתוח — נפתח חוב חדש ✓"
+                    }
+                }
+                is ProposedAction.DebtPayment -> {
+                    val d = Assistant.findOpenDebt(data, a.person, today) ?: throw IllegalStateException("לא מצאתי חוב פתוח של ${a.person}.")
+                    val acc = Assistant.findAccount(data, a.account)?.id ?: defaultAccountId ?: throw ValidationError.UnknownAccount
+                    recordDebtPayment(d.id, a.amount, a.date ?: today, acc)
+                    msg = "התשלום נרשם ✓"
+                }
+                is ProposedAction.AddEvent -> {
+                    val c = a.person?.let { (Assistant.findContact(data, it) ?: addContact(Contact(name = it))).id }
+                    save(FinanceEvent(title = a.title, date = a.date, expectedIncome = a.expectedIncome, contactId = c, isIncomeEvent = if (a.expectedIncome != null) true else null))
+                }
+            }
+        }
+        if (ok) resolve(entryId, index, msg)
+    }
 
     /** Runs a mutation and shows a Hebrew error instead of crashing. */
     fun attempt(block: () -> Unit): Boolean = try { block(); true } catch (e: ValidationError) { error = e.hebrew; false } catch (e: Exception) { error = e.message ?: "שגיאה"; false }

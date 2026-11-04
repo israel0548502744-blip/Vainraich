@@ -34,6 +34,7 @@ fun HomeScreen(vm: AppViewModel) {
     }
     val s = vm.summary(range)
     ScreenScaffold("הכסף שלי", actions = {
+        IconButton(onClick = { vm.push(Route.Chat) }) { Icon(Icons.Outlined.AutoAwesome, "העוזר שלי", tint = Palette.brand, modifier = Modifier.size(28.dp)) }
         Box {
             IconButton(onClick = { addMenu = true }) { Icon(Icons.Outlined.AddCircle, "הוספה", tint = Palette.brand, modifier = Modifier.size(30.dp)) }
             DropdownMenu(addMenu, { addMenu = false }) {
@@ -59,6 +60,18 @@ fun HomeScreen(vm: AppViewModel) {
                 if (period == Period.CUSTOM) DateField("עד תאריך", customEnd) { customEnd = it }
             }
             item { EventQuestionsCard(vm) }
+            item {
+                Card(onClick = { vm.push(Route.Chat) }, padding = 14.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(40.dp).clip(CircleShape).background(Palette.brandSoft), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.AutoAwesome, null, tint = Palette.brand) }
+                        Column(Modifier.weight(1f)) {
+                            Text("שאל את העוזר", fontWeight = FontWeight.SemiBold)
+                            Text("\"כמה יש לי באמת?\" · \"רשום הוצאה של 50 על דלק\" — בכתב או בקול", style = MaterialTheme.typography.labelSmall, color = Palette.secondaryText)
+                        }
+                        Icon(Icons.Outlined.Mic, null, tint = Palette.brand)
+                    }
+                }
+            }
             item { HeroCard(vm, s) }
             item { EquationCard(vm, s, range) }
             s.forecast.firstNegativeDay?.let { neg -> item { NegativeWarning(neg) } }
@@ -239,6 +252,7 @@ fun MoreScreen(vm: AppViewModel) {
             }
             item {
                 FormSection("הכנסת נתונים") {
+                    NavRow(Icons.Outlined.AutoAwesome, "העוזר שלי — שיחה עם בינה מלאכותית", { vm.push(Route.Chat) })
                     NavRow(Icons.Outlined.DocumentScanner, "ייבוא ממסמך או צילום", { vm.push(Route.Import) })
                     NavRow(Icons.Outlined.Contacts, "אנשי קשר", { vm.push(Route.Contacts) })
                     NavRow(Icons.Outlined.Sell, "קטגוריות", { vm.push(Route.Categories) })

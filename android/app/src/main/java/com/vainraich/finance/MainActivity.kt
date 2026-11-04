@@ -96,6 +96,7 @@ class MainActivity : FragmentActivity() {
             "review" -> { vm.tab = Tab.CALENDAR; vm.push(Route.PaymentReview) }
             "newExpense" -> { vm.tab = Tab.TRANSACTIONS; vm.push(Route.EditTransaction(null)) }
             "newEvent" -> { vm.tab = Tab.CALENDAR; vm.push(Route.EditEvent(null)) }
+            "chat" -> { vm.tab = Tab.HOME; vm.push(Route.Chat) }
             else -> vm.tab = Tab.HOME
         }
     }
@@ -216,5 +217,6 @@ fun RouteScreen(vm: AppViewModel, r: Route) {
         Route.CalendarSettings -> CalendarSettingsScreen(vm)
         Route.NotificationSettings -> NotificationSettingsScreen(vm)
         Route.Integrations -> IntegrationsScreen(vm)
+        Route.Chat -> ChatScreen(vm)
     }
 }

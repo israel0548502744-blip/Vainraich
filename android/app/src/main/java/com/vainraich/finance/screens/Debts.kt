@@ -24,6 +24,9 @@ import com.vainraich.finance.ui.Card
 fun DebtsScreen(vm: AppViewModel) {
     var dir by remember { mutableStateOf(DebtDirection.RECEIVABLE) }
     var showClosed by remember { mutableStateOf(false) }
+    var quick by remember { mutableStateOf<DebtBalance?>(null) }
+    var paying by remember { mutableStateOf<DebtBalance?>(null) }
+    var charging by remember { mutableStateOf<DebtBalance?>(null) }
     val all = vm.data.debts.filter { it.direction == dir }.map { vm.debtBalance(it) }
     val open = all.filter { it.isOpen }.sortedWith(compareBy({ if (it.isOverdue) 0 else 1 }, { it.debt.dueDate ?: java.time.LocalDate.MAX }))
     val closed = all.filter { !it.isOpen }
@@ -50,7 +53,7 @@ fun DebtsScreen(vm: AppViewModel) {
                     if (dir == DebtDirection.RECEIVABLE) Text("כסף שחייבים לך לא נספר ככסף זמין עד שהוא מתקבל בפועל.", style = MaterialTheme.typography.labelSmall, color = Palette.secondaryText)
                 }
             }
-            if (open.isNotEmpty()) item { FormSection("פתוחים") { open.forEach { b -> DebtRow(vm, b) { vm.push(Route.DebtDetail(b.debt.id)) } } } }
+            if (open.isNotEmpty()) item { FormSection("פתוחים") { open.forEach { b -> DebtRow(vm, b, onAdd = { quick = b }) { vm.push(Route.DebtDetail(b.debt.id)) } } } }
             if (closed.isNotEmpty()) item {
                 FormSection {
                     TextButton(onClick = { showClosed = !showClosed }) { Text("סגורים (${closed.size})"); Icon(if (showClosed) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null) }
@@ -60,6 +63,39 @@ fun DebtsScreen(vm: AppViewModel) {
             if (vm.data.contacts.isNotEmpty()) item { FormSection("לפי אדם") { NavRow(Icons.Outlined.Contacts, "היסטוריית תשלומים לכל איש קשר", { vm.push(Route.Contacts) }) } }
         }
     }
+    quick?.let { b ->
+        val d = b.debt
+        val name = vm.data.contact(d.contactId)?.name.orEmpty()
+        AlertDialog(onDismissRequest = { quick = null }, title = { Text(name) }, text = {
+            Column {
+                Text("${d.title} · נותר ${b.remaining.ils()}", color = Palette.secondaryText, modifier = Modifier.padding(bottom = 8.dp))
+                NavRow(Icons.Outlined.Payments, if (d.direction == DebtDirection.RECEIVABLE) "רישום תשלום שקיבלתי" else "רישום תשלום ששילמתי", { quick = null; paying = b })
+                NavRow(Icons.Outlined.AddCircle, "הוספת סכום לחוב (חיוב נוסף)", { quick = null; charging = b })
+            }
+        }, confirmButton = {}, dismissButton = { TextButton(onClick = { quick = null }) { Text("ביטול") } })
+    }
+    paying?.let { b -> DebtPaymentDialog(vm, b.debt, b.remaining) { paying = null } }
+    charging?.let { b -> DebtChargeDialog(vm, b.debt) { charging = null } }
+}
+
+@Composable
+fun DebtChargeDialog(vm: AppViewModel, d: Debt, onDismiss: () -> Unit) {
+    var amount by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("הוספת סכום לחוב") }, text = {
+        Column {
+            MoneyField("כמה להוסיף", amount, { amount = it })
+            Field("על מה (למשל: הדפסה נוספת)", reason, { reason = it })
+            Text("הסכום יתווסף לחוב של ${vm.data.contact(d.contactId)?.name.orEmpty()} (עכשיו ${d.originalAmount.ils()}), והתאריך יירשם בהערות.",
+                style = MaterialTheme.typography.labelSmall, color = Palette.secondaryText)
+        }
+    }, confirmButton = {
+        TextButton(onClick = {
+            val amt = MoneyText.parse(amount)?.abs2()
+            if (amt == null || !amt.isPos) vm.error = ValidationError.NonPositiveAmount.hebrew
+            else if (vm.attempt { vm.addCharge(d.id, amt, reason) }) { vm.show("נוסף לחוב"); onDismiss() }
+        }) { Text("הוספה") }
+    }, dismissButton = { TextButton(onClick = onDismiss) { Text("ביטול") } })
 }
 
 @Composable
@@ -68,6 +104,7 @@ fun DebtDetailScreen(vm: AppViewModel, id: String) {
     val b = vm.debtBalance(d)
     val contact = vm.data.contact(d.contactId)
     var paying by remember { mutableStateOf(false) }
+    var charging by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     ScreenScaffold(d.title, onBack = vm::pop, actions = { TextButton(onClick = { vm.push(Route.EditDebt(d.id)) }) { Text("עריכה") } }) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -90,6 +127,7 @@ fun DebtDetailScreen(vm: AppViewModel, id: String) {
             FormSection {
                 if (b.isOpen) {
                     NavRow(Icons.Outlined.AddCircle, if (d.direction == DebtDirection.RECEIVABLE) "רישום תשלום שהתקבל" else "רישום תשלום ששילמתי", { paying = true })
+                    NavRow(Icons.Outlined.PostAdd, "הוספת סכום לחוב (חיוב נוסף)", { charging = true })
                     NavRow(Icons.Outlined.Block, "סימון כנמחק (לא ייגבה)", { vm.setClosedStatus(d.id, DebtStatus.WRITTEN_OFF) })
                     NavRow(Icons.Outlined.Cancel, "ביטול החוב", { vm.setClosedStatus(d.id, DebtStatus.CANCELLED) })
                 } else if (d.closedStatus != null) NavRow(Icons.Outlined.Restore, "פתיחה מחדש", { vm.setClosedStatus(d.id, null) })
@@ -112,6 +150,7 @@ fun DebtDetailScreen(vm: AppViewModel, id: String) {
         }
     }
     if (paying) DebtPaymentDialog(vm, d, b.remaining) { paying = false }
+    if (charging) DebtChargeDialog(vm, d) { charging = false }
     if (confirmDelete) ConfirmDialog("למחוק את החוב?", null, "מחיקה", onConfirm = { vm.deleteDebt(d.id); vm.pop() }, onDismiss = { confirmDelete = false })
 }
 

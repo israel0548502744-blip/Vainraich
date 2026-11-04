@@ -99,7 +99,7 @@ fun EventRow(vm: AppViewModel, e: FinanceEvent, onClick: () -> Unit) {
 }
 
 @Composable
-fun DebtRow(vm: AppViewModel, b: DebtBalance, onClick: () -> Unit) {
+fun DebtRow(vm: AppViewModel, b: DebtBalance, onAdd: (() -> Unit)? = null, onClick: () -> Unit) {
     val d = b.debt
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -115,6 +115,7 @@ fun DebtRow(vm: AppViewModel, b: DebtBalance, onClick: () -> Unit) {
                     else -> Badge(Labels.debtStatus(b.status), Palette.debtStatus(b.status))
                 }
             }
+            if (onAdd != null && b.isOpen) IconButton(onClick = onAdd) { Icon(Icons.Outlined.AddCircle, "הוספה לחוב או רישום תשלום", tint = Palette.brand, modifier = Modifier.size(30.dp)) }
         }
         if (b.paid.isPos && b.isOpen) {
             LinearProgressIndicator(progress = { b.progress }, modifier = Modifier.fillMaxWidth(), color = Palette.actual)

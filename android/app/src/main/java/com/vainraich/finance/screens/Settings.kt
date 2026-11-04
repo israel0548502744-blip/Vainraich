@@ -112,7 +112,14 @@ fun AiSettingsScreen(vm: AppViewModel) {
     var result by remember(provider) { mutableStateOf<Pair<Boolean, String>?>(null) }
     fun persist() { ai.setKey(provider, key); ai.setModel(provider, model); if (provider == AiProvider.CUSTOM) ai.customUrl = url }
     DisposableEffect(Unit) { onDispose { persist() } }
-    ScreenScaffold("בינה מלאכותית", onBack = { persist(); vm.pop() }) { pad ->
+    fun saveAndClose() {
+        persist(); ai.provider = provider
+        if (provider.needsKey && key.isBlank()) { vm.error = "חסר מפתח API. הדבק את המפתח שקיבלת מהספק ואז לחץ שמירה."; return }
+        vm.show("ההגדרות נשמרו"); vm.pop()
+    }
+    ScreenScaffold("בינה מלאכותית", onBack = { persist(); vm.pop() }, actions = {
+        TextButton(onClick = ::saveAndClose) { Text("שמירה", fontWeight = FontWeight.Bold) }
+    }) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(16.dp)) {
             FormSection("מי יקרא את המסמכים", "כל הספקים עובדים עם מפתח API אישי שלך — האפליקציה לא גובה כסף ולא שולחת לשרת שלה. אפשר להחליף ספק בכל רגע.") {
                 AiProvider.entries.forEach { p ->
@@ -164,6 +171,12 @@ fun AiSettingsScreen(vm: AppViewModel) {
                 }
             } else FormSection {
                 Text("קורא קובצי PDF דיגיטליים וטקסט מודבק — בלי אינטרנט ובלי לשלוח שום דבר. מתאים לדפי תנועות פשוטים. לצילומים ולמסמכים מורכבים בחר ספק בינה מלאכותית (למשל Gemini החינמי).", modifier = Modifier.padding(vertical = 8.dp))
+            }
+            Button(onClick = ::saveAndClose, modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp)) {
+                Icon(Icons.Outlined.Check, null); Spacer(Modifier.width(8.dp)); Text("שמירה", fontWeight = FontWeight.Bold)
+            }
+            if (provider.remote) TextButton(onClick = { persist(); ai.provider = provider; vm.pop(); vm.push(Route.Chat) }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.AutoAwesome, null); Spacer(Modifier.width(6.dp)); Text("שמירה ומעבר לשיחה עם העוזר")
             }
         }
     }

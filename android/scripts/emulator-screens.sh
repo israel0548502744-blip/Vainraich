@@ -14,7 +14,7 @@ shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
 start() { adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null 2>&1 || true; adb shell am start -S -W -n $PKG/.MainActivity "$@" > /dev/null; sleep 4; }
 
 start; sleep 2; shot 00-onboarding
-for s in home calendar transactions debts more accounts reports settings ai import forecast review newExpense newEvent; do
+for s in home calendar transactions debts more accounts reports settings ai import forecast review newExpense newEvent chat; do
   start --ez uiDemo true --es startScreen "$s"
   shot "$s"
 done

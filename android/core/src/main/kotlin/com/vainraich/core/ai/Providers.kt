@@ -20,7 +20,7 @@ interface DocumentExtractor {
     fun extract(input: DocInput): ExtractionResult
 }
 
-interface RemoteProvider : DocumentExtractor {
+interface RemoteProvider : DocumentExtractor, ChatProvider {
     fun listModels(): List<String>
 }
 
@@ -116,6 +116,11 @@ class GeminiProvider(
             .mapNotNull { (it["name"] as? JsonPrimitive)?.content?.removePrefix("models/") }.sorted()
     }
 
+    override fun chat(system: String, messages: List<ChatMessage>): String {
+        val r = http.send(ChatRequests.gemini(baseUrl, model, apiKey, system, messages)); Http.check(r)
+        return parseText(r.body)
+    }
+
     companion object {
         const val DEFAULT_MODEL = "gemini-flash-latest"
         fun parseText(body: String): String {
@@ -185,6 +190,11 @@ class OpenAICompatibleProvider(
         return Prompt.parse(parseText(r.body), displayName)
     }
 
+    override fun chat(system: String, messages: List<ChatMessage>): String {
+        val r = http.send(ChatRequests.openAI(baseUrl, model, headers, system, messages)); Http.check(r)
+        return parseText(r.body)
+    }
+
     override fun listModels(): List<String> {
         val r = http.send(HttpRequest("${baseUrl.trimEnd('/')}/models", "GET", headers, null)); Http.check(r)
         return (Http.obj(r.body)["data"] as? JsonArray).orEmpty().mapNotNull { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.content }.sorted()
@@ -244,6 +254,11 @@ class AnthropicProvider(
         if (apiKey.isBlank()) throw AIError.missingKey
         val r = http.send(HttpRequest("$baseUrl/v1/models", "GET", headers - "anthropic-beta", null)); Http.check(r)
         return (Http.obj(r.body)["data"] as? JsonArray).orEmpty().mapNotNull { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.content }
+    }
+
+    override fun chat(system: String, messages: List<ChatMessage>): String {
+        val r = http.send(ChatRequests.anthropic(baseUrl, model, headers, apiKey, system, messages)); Http.check(r)
+        return parseText(r.body)
     }
 
     companion object {
